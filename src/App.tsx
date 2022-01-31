@@ -13,14 +13,22 @@ import tsSvg from "assets/icons/ts.svg";
 import { useEffect, useState } from "react";
 dayjs.extend(isToday);
 
-type ApiData = {
+// States
+export type ApiData = {
+  title: string;
+  cities: Cities;
+}[];
+
+type Cities = {
+  title: string;
+  forcast: Forcasts;
+}[];
+
+type Forcasts = {
   date: number;
-  temp2m: {
-    max: number;
-    min: number;
-  };
+  minTemp: number;
+  maxTemp: number;
   weather: string;
-  wind10m_max: number;
 }[];
 
 export type FormattedData = {
@@ -67,18 +75,18 @@ const numToDate = (num: number): Dayjs => {
 /**
  * Converts { ApiData } to { FormattedData }
  */
-const formatData = (data: ApiData): FormattedData => {
+const formatData = (data: Forcasts): FormattedData => {
   return data.map((day) => {
     return {
       date: numToDate(day.date),
       temp: {
         celcius: {
-          low: day.temp2m.min,
-          high: day.temp2m.max,
+          low: day.minTemp,
+          high: day.maxTemp,
         },
         farenheit: {
-          low: cToF(day.temp2m.min),
-          high: cToF(day.temp2m.max),
+          low: cToF(day.minTemp),
+          high: cToF(day.maxTemp),
         },
       },
       weather: day.weather,
@@ -87,34 +95,49 @@ const formatData = (data: ApiData): FormattedData => {
 };
 
 const App = () => {
-  const [weatherData, setWeatherData] = useState<
+  const [forcastData, setForcastData] = useState<
     FormattedData | null | "LOADING"
   >("LOADING");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [selectedCityIndex, setSelectedCityIndex] = useState<{
+    stateIndex: number;
+    cityIndex: number;
+  }>({ stateIndex: 0, cityIndex: 0 });
   const [isNavClosed, setIsNavClosed] = useState(true);
   const [isCelciusSelected, setIsCelciusSelected] = useState(false);
+  const [weatherData, setWeatherData] = useState<ApiData | null>(null);
+
+  useEffect(() => {
+    if (weatherData !== null) {
+      const forcast =
+        weatherData[selectedCityIndex.stateIndex].cities[
+          selectedCityIndex.cityIndex
+        ].forcast;
+      const formattedData = formatData(forcast);
+      setForcastData(formattedData);
+    }
+  }, [selectedCityIndex, weatherData]);
 
   /**
    * This effect fetches the data from the api and sets that data in the
-   * weatherData state. If the api fails, weatherData state is set to null
+   * forcastData state. If the api fails, weatherData state is set to null
    */
   useEffect(() => {
-    if (weatherData === "LOADING") {
+    if (forcastData === "LOADING") {
       try {
         axios
-          .get(
-            "https://www.7timer.info/bin/api.pl?lon=-76.887&lat=40.273&product=civillight&unit=british&output=json"
-          )
+          .get("https://c96e-68-81-220-91.ngrok.io/states")
           .then((response) => {
-            const data: ApiData = response.data.dataseries;
-            const formattedData = formatData(data);
-            setWeatherData(formattedData);
+            const data: ApiData = response.data;
+            setWeatherData(data);
+            const formattedData = formatData(data[0].cities[0].forcast);
+            setForcastData(formattedData);
           });
       } catch {
-        setWeatherData(null);
+        setForcastData(null);
       }
     }
-  }, [weatherData]);
+  }, [forcastData]);
 
   /**
    * Takes in the 'weather' string from api and returns the formatted text
@@ -148,7 +171,7 @@ const App = () => {
     }
   };
 
-  if (weatherData === "LOADING") {
+  if (forcastData === "LOADING") {
     return (
       <div className="w-screen h-screen pt-40 text-4xl text-center text-white bg-blue">
         Loading...
@@ -156,7 +179,7 @@ const App = () => {
     );
   }
 
-  if (weatherData === null) {
+  if (forcastData === null || weatherData === null) {
     return (
       <div className="w-screen h-screen pt-40 text-4xl text-center text-white bg-blue">
         The api is down, please try again later.
@@ -164,18 +187,25 @@ const App = () => {
     );
   }
 
-  const selectedDay = weatherData[selectedIndex];
+  const selectedDay = forcastData[selectedDayIndex];
 
   const isToday = selectedDay.date.isToday();
 
   const { text, imgSrc } = formatWeatherString(selectedDay.weather);
+
+  let city =
+    weatherData[selectedCityIndex.stateIndex].cities[
+      selectedCityIndex.cityIndex
+    ];
 
   return (
     <div className="w-screen h-screen pt-20 overflow-hidden text-center text-white bg-blue">
       <h2 className="text-2xl">{`${
         isToday ? "Today, " : ""
       }${selectedDay.date.format("MMMM DD")}`}</h2>
-      <h1 className="text-3xl font-bold">Harisburg, PA</h1>
+      <h1 className="text-3xl font-bold">{`${city.title}, ${
+        city.title === "New York" ? "NY" : "PA"
+      }`}</h1>
       <img
         className="w-40 mx-auto mt-12 mb-6"
         src={imgSrc}
@@ -200,12 +230,12 @@ const App = () => {
       </h4>
 
       <section className="mt-12 grid-cols-7 grid">
-        {weatherData.map((day, index) => {
+        {forcastData.map((day, index) => {
           const { text, imgSrc } = formatWeatherString(day.weather);
-          const isSelected = index === selectedIndex;
+          const isSelected = index === selectedDayIndex;
           return (
             <div
-              onClick={() => setSelectedIndex(index)}
+              onClick={() => setSelectedDayIndex(index)}
               key={index}
               className={`py-3 rounded ${
                 isSelected ? "bg-black/60" : "hover:bg-black/50"
@@ -235,6 +265,8 @@ const App = () => {
         setIsClosed={() => setIsNavClosed(true)}
         isCelciusSelected={isCelciusSelected}
         setIsCelciusSelected={setIsCelciusSelected}
+        data={weatherData}
+        setSelectedCityIndex={setSelectedCityIndex}
       />
     </div>
   );
