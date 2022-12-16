@@ -1,3 +1,4 @@
+# Weather app coding challenge for some government job that didn't accept me
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
